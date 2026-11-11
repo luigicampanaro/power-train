@@ -33,7 +33,7 @@ action_horizon: ${action_horizon}
 
 net:
   _target_: diff_style.models.flow_matching_network.FlowMatchingNetwork
-  num_cameras: 2  # tomato_picking: gripper, main
+  num_cameras: 2
   qpos_dim: ${..qpos_dim}
   action_dim: ${..action_dim}
   obs_horizon_1d: ${obs_horizon_1d}
@@ -52,13 +52,13 @@ net:
     input_dim: ${model.net.vision_encoder.dim}
     num_latents: 16  # tokens per image: 2 cameras x 2 frames x 16 = 64 image tokens
     dim: ${model_dim}
-    num_heads: 6     # head_dim 64, the size the flash kernels are fastest at
+    num_heads: 8     # head_dim 64 (model_dim / 8), the size the flash kernels are fastest at
 
   obs_encoder:  # self-attention over the tokens of every camera and proprio, once per sample
     _target_: diff_style.models.transformer.Transformer
     dim: ${model_dim}
-    depth: 4  # the computation on the image tokens happens here, not in the Perceiver
-    num_heads: 6
+    depth: 6  # the computation on the image tokens happens here, not in the Perceiver
+    num_heads: 8
     causal: false  # true: each token sees only the tokens before it, no mask tensor needed
     dropout: 0.1  # each branch's output, training only (DiT-Block Policy's 0.1); the attention weights: attention.dropout
     drop_path: 0.1  # stochastic depth of the last block, linear from 0 at the first (timm's ViT); HPT's trunk: 0.1
@@ -66,8 +66,8 @@ net:
   action_decoder:  # noisy actions -> velocity, conditioned on the obs tokens and the flow time
     _target_: diff_style.models.transformer.Transformer
     dim: ${model_dim}
-    depth: 6
-    num_heads: 6
+    depth: 8
+    num_heads: 8
     cross_attention: true   # to the obs tokens
     cond_dim: ${model_dim}  # adaLN-Zero from the flow time embedding
     causal: false           # true: action i attends to actions 0..i only (the obs tokens stay fully visible)

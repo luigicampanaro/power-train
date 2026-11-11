@@ -11,6 +11,7 @@ image_size: ${image_size}          # every batch is resized to this on the GPU, 
 train_fraction: 0.8
 val_fraction: 0.1
 test_fraction: 0.1
-batch_size: 64
+batch_size: 192                    # leaves headroom on an RTX 5080 (16 GB) and 62 GB RAM with the 101M model. 256 also
+                                   # runs (10 GB GPU, 47 GB RAM peak: workers x prefetched batches of raw 480x640 frames), but tight
 num_workers: 8
 seed: 0                            # split only, independent of the training seed

@@ -27,5 +27,6 @@ obs_horizon_1d: 2    # past non-image observations (qpos and past actions): chea
 obs_horizon_2d: 2    # past image frames: heavy, keep short
 action_horizon: 16   # future actions predicted per sample
 
-model_dim: 384             # width of every transformer of the policy
+model_dim: 512             # width of every transformer of the policy; num_heads = model_dim / 64 in configs/model/flow_matching.yaml.
+                           # 512, obs_encoder 6 + action_decoder 8 layers: 101M params, 72.7M trained + 28.7M frozen DINOv3
 compile: true              # torch.compile the network (scripts/train.py): about 2x faster, after a few minutes of compiling
