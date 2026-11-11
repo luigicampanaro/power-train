@@ -1,5 +1,5 @@
 _target_: diff_style.datamodules.episode_datamodule.EpisodeDataModule
-dataset_dir: /home/eai/luigi_cloud_new/ml/act/data/tomato_picking
+dataset_dir: /path/to/tomato_picking  # folder of episode_*.hdf5 files
 stats_path: ${run_dir}/stats.pt    # copy for inspection/export; the checkpoint has its own
 # Horizons shared with the policy
 obs_horizon_1d: ${obs_horizon_1d}
