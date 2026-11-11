@@ -1,0 +1,2 @@
+# The train bar in optimizer steps for the full run (step / max_steps, the run's remaining time), not per epoch.
+_target_: diff_style.callbacks.progress_bar.StepProgressBar

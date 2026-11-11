@@ -1,0 +1,4 @@
+# DiT's / ViT's norm. A factory: each layer adds dim (and elementwise_affine=false under adaLN).
+_target_: torch.nn.LayerNorm
+_partial_: true
+eps: 1.0e-6

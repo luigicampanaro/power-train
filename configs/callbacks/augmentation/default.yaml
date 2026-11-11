@@ -1,0 +1,4 @@
+_target_: diff_style.callbacks.augmentation.AugmentationCallback
+augmentor: ${augmentation}
+image_key: images
+seed: ${seed}  # augmentation draws depend only on (seed, GPU rank, epoch, batch index)

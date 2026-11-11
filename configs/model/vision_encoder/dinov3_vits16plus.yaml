@@ -1,0 +1,7 @@
+# DINOv3 ViT-S/16+ (29M parameters), the Hugging Face model, as ml/act uses it. Loaded from the local Hugging Face
+# cache only: the weights are gated. Request access on https://huggingface.co/facebook/dinov3-vits16plus-pretrain-lvd1689m,
+# then: hf download facebook/dinov3-vits16plus-pretrain-lvd1689m
+# Frozen or trained: model.submodule_lrs.vision_encoder (0 = frozen).
+_target_: diff_style.models.vision.dinov3.DINOv3Encoder
+model_id: facebook/dinov3-vits16plus-pretrain-lvd1689m
+dim: 384      # token width of ViT-S/16+; checked when loading, and the Perceiver reads it

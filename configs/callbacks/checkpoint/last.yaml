@@ -1,0 +1,5 @@
+# last.ckpt: the most recent state of the run (with the EMA weights), replaced at each save, whatever the metrics.
+_target_: pytorch_lightning.callbacks.ModelCheckpoint
+dirpath: ${run_dir}/checkpoints
+filename: last
+save_top_k: 1   # no monitor: only the most recent checkpoint

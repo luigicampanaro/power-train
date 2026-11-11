@@ -1,0 +1,3 @@
+# FlashAttention 3: Hopper GPUs (H100/H200) with the flash_attn_interface package; no masks.
+_target_: diff_style.models.layers.attention.flash3
+_partial_: true

@@ -1,0 +1,9 @@
+# Multi-head attention (src/diff_style/models/layers/attention.py). A factory: each layer adds dim,
+# num_heads and, for the self-attention, is_causal (the `causal` of its transformer).
+_target_: diff_style.models.layers.Attention
+_partial_: true
+qk_norm: true       # RMSNorm on each head's queries and keys (Qwen3, OLMo 2, SD3): stable attention logits
+bias: false         # Llama: no biases
+dropout: 0.0        # attention weights, training only (Diffusion Policy: 0.3 on real-robot data); flash3 needs 0
+scale: null         # of the logits q k^T; null = 1 / sqrt(head_dim)
+attention_fn: ${attention_fn}  # the kernel, chosen once for every module in train.yaml

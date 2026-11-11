@@ -1,0 +1,46 @@
+# Self-contained, so it stays correct outside this monorepo.
+# Commit: pyproject.toml, uv.lock, .python-version, assets/, configs/, notebooks/, src/, scripts/, tests/
+
+# Python version pin is part of the uv project (the repo-root .gitignore ignores it)
+!.python-version
+
+# Environment
+.venv/
+
+# Python bytecode / packaging
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+__marimo__/
+
+# Run outputs: Hydra run dirs (checkpoints, logs, configs), Lightning/TensorBoard fallbacks
+outputs/
+multirun/
+lightning_logs/
+checkpoints/
+*.ckpt
+events.out.tfevents.*
+
+# Written by notebooks/augmentation_bounds.py; the recipe lives in configs/augmentation/
+notebooks/augmentation_selected.yaml
+
+# Data lives outside the repo; never commit recordings or exports
+*.hdf5
+*.h5
+*.mcap
+*.onnx
+*.engine
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

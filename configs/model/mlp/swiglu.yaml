@@ -1,0 +1,5 @@
+# Llama's gated MLP. A factory: each layer adds dim and hidden_dim = mlp_ratio * dim (mlp_ratio 8/3).
+_target_: diff_style.models.layers.SwiGLUMLP
+_partial_: true
+dropout: 0.0  # on the gated hidden activations, training only (timm's SwiGLU drop)
+multiple_of: 256  # hidden_dim rounded up to a multiple of it, as Llama: aligned GEMMs (model_dim 512: 1365 -> 1536)

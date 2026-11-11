@@ -1,0 +1,11 @@
+# @package hydra
+# Settings for Hydra itself, kept out of train.yaml:
+#  - don't change the working directory, so relative paths resolve against the project
+#  - one new folder per run, outputs/<date>_<time> in the folder the run starts in (start it in the project folder).
+#    Hydra writes its own files (.hydra/config.yaml, train.log) there, and train.yaml's run_dir is this folder.
+#    Choose another folder with hydra.run.dir=outputs/<name>. On several machines, give the same hydra.run.dir on
+#    every machine: each machine has its own clock, so a timestamp would give each machine its own folder.
+job:
+  chdir: false
+run:
+  dir: outputs/${now:%Y-%m-%d_%H-%M-%S}

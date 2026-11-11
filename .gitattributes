@@ -1,0 +1,2 @@
+# Golden test fixtures are binary: never text-diff or line-merge them.
+*.pt binary

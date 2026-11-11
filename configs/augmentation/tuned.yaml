@@ -1,0 +1,74 @@
+# Tuned image augmentation: the bounds search of notebooks/augmentation_bounds.py, with the
+# probability of each transform set to how often its cause occurs in deployment.
+#
+# Crop and color jitter carry the two nuisances that are present in every deployment frame: the
+# camera pose error and the illumination. They are the only transforms the manipulation policies use
+# (see default.yaml), and they stay the two workhorses. The other transforms model conditions that
+# occur less often here, so their probability is a frequency, not a strength:
+#
+#   transform          cause in this greenhouse         share of all images
+#   crop               camera pose error, object place  63.0%  (p 0.90)
+#   color_jitter       illumination, white balance      63.0%  (p 0.90)
+#   rotation           mount roll, constant per rig     14.0%  (p 0.20)
+#   sharpness          focus and exposure drift         10.5%  (p 0.15)
+#   planckian_jitter   lamp spectrum, daylight color     7.0%  (p 0.10)
+#   gaussian_noise     sensor noise, low light           3.5%  (p 0.05)
+#   gamma_correction   nonlinear exposure response       3.5%  (p 0.05)
+#
+# No transform sits at 1.0. At a certainty, every combination where the transform is absent leaves
+# the training support, and "full frame with shifted photometry" is a deployment combination. At
+# 0.90, 37% of the images keep the full frame while 63% see the nuisance.
+#
+# Off, and the cause is why: motion_blur (fixed camera, short exposure), jpeg_compression (the
+# recorder already applies it), coarse_dropout and patch_brightness (occlusion cannot be applied
+# without a mask that keeps the grasp point visible).
+#
+# The upper brightness bound stays at 1.10: the frames have a near-white backdrop that clips above an
+# effective gain (brightness x contrast) of about 1.5, and 1.10 x 1.50 is the highest permitted.
+#
+# Select it with: augmentation=tuned
+_target_: diff_style.augmentations.Augmentor
+clean_probability: 0.3  # 30% real images, 70% augmented
+config:
+  crop:  # random crop of the same aspect ratio, resized back to image_size
+    probability: 0.90
+    ratio: [0.90, 1.00]
+  rotation:
+    probability: 0.20
+    degrees: 5.0
+    padding_mode: reflection
+  color_jitter:
+    probability: 0.90
+    brightness: [0.25, 1.10]
+    contrast: [0.60, 1.50]
+    saturation: [0.40, 2.00]
+    hue: [-0.05, 0.05]
+  sharpness:
+    probability: 0.15
+    factor: [0.30, 2.00]
+  planckian_jitter:
+    probability: 0.10
+    temperature: [3000, 20000]
+  gaussian_noise:
+    probability: 0.05
+    sigma: [0.01, 0.05]
+  motion_blur:
+    probability: 0.0
+    kernel_size: [3, 7]
+    angle: [-180.0, 180.0]
+  jpeg_compression:
+    probability: 0.0
+    quality: [30, 75]
+  coarse_dropout:
+    probability: 0.0
+    patches: [1, 4]
+    area: [0.02, 0.05]
+    fill: 0.0
+  patch_brightness:
+    probability: 0.0
+    factor: [0.19, 2.22]
+    size: [0.1, 0.25]
+    softness: 0.5
+  gamma_correction:
+    probability: 0.05
+    gamma: [0.50, 3.00]

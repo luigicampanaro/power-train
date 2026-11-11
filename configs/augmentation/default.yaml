@@ -1,0 +1,66 @@
+# GPU image augmentation, train batches only. One parameter draw per sample is shared by all
+# history frames and cameras.
+#
+# clean_probability of the samples stay real images (like validation and the robot). The other
+# samples get each transform with its own probability. Set a probability to 0 to deactivate it.
+#
+# Override any value from the command line, for example:
+#   augmentation.clean_probability=0.5
+#   augmentation.config.color_jitter.brightness=[0.70, 1.30]
+#
+# Sources of the defaults:
+#   [DP]       Diffusion Policy (Chi et al., RSS 2023), real-robot config: random crop 90% of each side
+#   [UMI]      Universal Manipulation Interface (Chi et al., RSS 2024): crop 95%, ColorJitter(0.3, 0.4, 0.5, 0.08),
+#              rotation +/-5 deg present but commented out
+#   [Octo]     Octo (Ghosh et al., RSS 2024): crop area 80-100%, brightness +/-0.1, contrast/saturation 0.9-1.1, hue 0.05
+#   [OpenVLA]  OpenVLA (Kim et al., CoRL 2024): crop area 90%, brightness +/-0.2, contrast/saturation 0.8-1.2, hue 0.05
+#   [LeRobot]  LeRobot image transforms: brightness/contrast 0.8-1.2, saturation 0.5-1.5, hue 0.05, sharpness 0.5-1.5
+#   [Planck]   Planckian Jitter (Zini et al., ICLR 2023): black-body light 3000-15000 K
+#   [RE]       Random Erasing (Zhong et al., AAAI 2020): erased area from 2%
+#   [Albu]     Albumentations RandomGamma default: gamma 0.8-1.2
+#   (none)     no common default in manipulation papers: mild values, low probability
+_target_: diff_style.augmentations.Augmentor
+clean_probability: 0.3  # 30% real images, 70% augmented
+config:
+  crop:  # random crop of the same aspect ratio, resized back to image_size
+    probability: 1.0
+    ratio: [0.90, 1.00]  # side ratio: [DP] 0.90, [UMI] 0.95, [Octo] area 0.8-1.0 = side 0.89-1.0
+  rotation:
+    probability: 0.30
+    degrees: 5.0  # [UMI] +/-5 (commented out there): keep it mild
+    padding_mode: reflection
+  color_jitter:  # [OpenVLA]; [LeRobot] same except saturation 0.5-1.5
+    probability: 1.0
+    brightness: [0.80, 1.20]
+    contrast: [0.80, 1.20]
+    saturation: [0.80, 1.20]
+    hue: [-0.05, 0.05]
+  sharpness:
+    probability: 0.30
+    factor: [0.50, 1.50]  # [LeRobot]
+  planckian_jitter:
+    probability: 0.10
+    temperature: [3000, 15000]  # [Planck], kelvin
+  gaussian_noise:
+    probability: 0.10
+    sigma: [0.01, 0.03]  # (none), on [0, 1] pixels
+  motion_blur:
+    probability: 0.05
+    kernel_size: [3, 7]  # (none), pixels, odd sizes only
+    angle: [-180.0, 180.0]
+  jpeg_compression:
+    probability: 0.0  # CPU round trip; keep off for maximum GPU throughput
+    quality: [30, 75]
+  coarse_dropout:
+    probability: 0.10
+    patches: [1, 2]
+    area: [0.02, 0.05]  # each patch, fraction of the image: [RE] starts at 0.02, kept small to not hide the task
+    fill: 0.0
+  patch_brightness:  # a soft shadow or highlight
+    probability: 0.10
+    factor: [0.50, 0.80]  # (none)
+    size: [0.10, 0.25]  # side, fraction of the image side
+    softness: 0.5  # faded part of each half side: 0 hard edge, 1 fades to the center
+  gamma_correction:
+    probability: 0.10
+    gamma: [0.80, 1.20]  # [Albu]

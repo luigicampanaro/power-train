@@ -1,0 +1,12 @@
+_target_: pytorch_lightning.Trainer
+accelerator: gpu
+devices: auto
+num_nodes: 1            # machines; more than 1: the same hydra.run.dir on every machine (scripts/train.py checks it)
+precision: bf16-mixed   # bf16 autocast, float32 weights. Also tested: 32-true, 64-true, 16-mixed, bf16-true;
+                        # not 16-true (pure float16 can't train: AdamW's eps and the norms' gradients overflow it)
+max_steps: 100000       # optimizer steps: the lr schedule, the warmup and the EMA count steps, not epochs
+max_epochs: -1          # no epoch limit: an epoch's length changes with the dataset, the batch and the horizons
+val_check_interval: 1000      # validate (and save the checkpoints) every 1000 optimizer steps, across epochs;
+check_val_every_n_epoch: null # keep max_steps a multiple of it, so the last validation is at the final step
+gradient_clip_val: 1.0
+log_every_n_steps: 50

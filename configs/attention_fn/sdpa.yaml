@@ -1,0 +1,5 @@
+# PyTorch's scaled_dot_product_attention (any GPU or CPU): FlashAttention 2 when it can, else cuDNN,
+# memory-efficient or math. See src/diff_style/models/layers/attention.py
+_target_: diff_style.models.layers.attention.sdpa
+_partial_: true
+kernels: null  # e.g. [FLASH_ATTENTION] to allow only that kernel (errors instead of falling back)

@@ -1,0 +1,10 @@
+# The save_top_k best checkpoints of the run by val/action_mse (with the EMA weights, as the EMA callback saves them).
+# No save_last here: Lightning 2.6 updates last.ckpt only when a top-k checkpoint is saved, so it would not always be
+# the final state. last.yaml keeps the final state.
+_target_: pytorch_lightning.callbacks.ModelCheckpoint
+dirpath: ${run_dir}/checkpoints
+monitor: val/action_mse     # the sampled actions against the real ones, on the val episodes
+mode: min                   # lower is better
+save_top_k: 3               # a few candidates to compare on the robot
+filename: best-{step:07d}   # -> best-step=0012345.ckpt (the metric name has a "/", so it stays out of the file name)
+save_on_train_epoch_end: false  # only after a validation: at the end of a last, partial epoch the score is old

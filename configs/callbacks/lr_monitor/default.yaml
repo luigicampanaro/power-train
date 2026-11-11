@@ -1,0 +1,4 @@
+# The lr of each parameter group in TensorBoard (lr-AdamW, lr-AdamW/pg2, ...), every log_every_n_steps steps:
+# the warmup and the cosine decay of warmup_cosine.
+_target_: pytorch_lightning.callbacks.LearningRateMonitor
+logging_interval: step

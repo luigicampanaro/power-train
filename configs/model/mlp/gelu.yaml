@@ -1,0 +1,8 @@
+# DiT's / ViT's MLP. A factory: each layer adds dim and hidden_dim = mlp_ratio * dim (set mlp_ratio: 4).
+_target_: diff_style.models.layers.MLP
+_partial_: true
+dropout: 0.0  # on the hidden activations, training only (timm's Mlp drop)
+activation:
+  _target_: torch.nn.GELU
+  _partial_: true
+  approximate: tanh

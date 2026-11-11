@@ -1,0 +1,31 @@
+defaults:
+  - datamodule: episodes
+  - augmentation: tuned  # the recipe from notebooks/augmentation_bounds.py; default.yaml has the sources
+  - callbacks/augmentation: default
+  - callbacks/ema: default
+  - callbacks/checkpoint@callbacks.best_checkpoint: best  # the best checkpoints by val/action_mse
+  - callbacks/checkpoint@callbacks.last_checkpoint: last  # last.ckpt, the final state
+  - callbacks/progress_bar: default
+  - callbacks/lr_monitor: default
+  - model: flow_matching
+  - attention_fn: sdpa  # the attention kernel of every module: configs/attention_fn
+  - trainer: default
+  - hydra: default
+  - _self_
+
+seed: 42
+
+frame_size: [480, 640]  # raw dataset frame, H x W
+image_size: [224, 224]  # model input, H x W; the datamodule resizes every batch, augmentation runs after
+
+# The run's folder: logs, checkpoints and stats.pt. Hydra's run folder (configs/hydra: outputs/<date>_<time>, or
+# hydra.run.dir=...), which Lightning passes to the processes it starts, so they all get the same folder.
+output_dir: ${hydra:runtime.output_dir}
+run_dir: ${output_dir}
+
+obs_horizon_1d: 2    # past non-image observations (qpos and past actions): cheap, can be long
+obs_horizon_2d: 2    # past image frames: heavy, keep short
+action_horizon: 16   # future actions predicted per sample
+
+model_dim: 384             # width of every transformer of the policy
+compile: true              # torch.compile the network (scripts/train.py): about 2x faster, after a few minutes of compiling

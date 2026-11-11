@@ -1,0 +1,4 @@
+# Exponential moving average of the weights that train, used for validation and saved in the checkpoint.
+# Diffusion Policy (Chi et al. 2023) evaluates its EMA weights too. A frozen vision encoder is not averaged.
+_target_: diff_style.callbacks.ema.TrainableEMA
+decay: 0.999

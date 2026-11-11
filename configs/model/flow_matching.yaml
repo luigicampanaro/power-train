@@ -1,0 +1,88 @@
+# Flow-matching policy (src/diff_style/policies/flow_matching.py). Every module is built by Hydra
+# from its own _target_, so any of them can be swapped from the command line or another config:
+#   model/vision_encoder=<a file in configs/model/vision_encoder>
+#   model/norm@model.net.action_decoder.norm=layer_norm   model/mlp@model.net.obs_encoder.mlp=gelu
+#   model.net.action_decoder.depth=8   model.net.perceiver.num_latents=32
+#   model.net.action_decoder.dropout=0.3   model.net.action_decoder.attention.dropout=0.3
+#   model.net.action_decoder.mlp.dropout=0.3   model.net.action_decoder.drop_path=0.1   model.net.camera_dropout=0.1
+#   model.submodule_lrs.vision_encoder=1e-5   +model.submodule_lrs.perceiver=0   (any path in net; 0 = frozen)
+# Widths and depths are a starting point, not tuned.
+defaults:
+  - vision_encoder@net.vision_encoder: dinov3_vits16plus
+  - attention@net.perceiver.attention: default
+  - norm@net.perceiver.norm: rms_norm
+  - norm@net.perceiver.feature_norm: rms_norm  # on the vision features, before the MLP; none = as they are
+  - mlp@net.perceiver.mlp: swiglu
+  - attention@net.obs_encoder.attention: default
+  - norm@net.obs_encoder.norm: rms_norm
+  - mlp@net.obs_encoder.mlp: swiglu
+  - attention@net.action_decoder.attention: default
+  - norm@net.action_decoder.norm: rms_norm
+  - mlp@net.action_decoder.mlp: swiglu
+  - _self_
+
+_target_: diff_style.policies.flow_matching.FlowMatchingPolicy
+_recursive_: false  # the policy builds `net` itself, so load_from_checkpoint needs only the checkpoint
+_convert_: all      # plain dicts in the checkpoint hyperparameters, no OmegaConf objects
+
+num_inference_steps: 10  # Euler steps from noise to actions
+# The sizes of the task: the policy's (normalizers, sampled actions), given to the network below
+qpos_dim: 7
+action_dim: 7
+action_horizon: ${action_horizon}
+
+net:
+  _target_: diff_style.models.flow_matching_network.FlowMatchingNetwork
+  num_cameras: 2  # tomato_picking: gripper, main
+  qpos_dim: ${..qpos_dim}
+  action_dim: ${..action_dim}
+  obs_horizon_1d: ${obs_horizon_1d}
+  obs_horizon_2d: ${obs_horizon_2d}
+  action_horizon: ${..action_horizon}
+  # Dropout, training only. A dropped input becomes a learned null token, per sample:
+  camera_dropout: 0.1       # each camera, all its frames (modality dropout; RDT-1B masks each input at 10%)
+  qpos_dropout: 0.1
+  past_action_dropout: 0.1  # e.g. 0.1-0.3, so the policy can't just copy its last action
+  condition_dropout: 0.0    # every obs token: trains the unconditional model of classifier-free guidance (DiT, BESO: 0.1)
+  embedding_dropout: 0.0    # elements of the tokens into the obs encoder / action decoder (GPT-2's embd_pdrop)
+  # vision_encoder, and the attention / norm / mlp of each module: from the defaults list above
+
+  perceiver:  # vision tokens of one image -> per-token MLP -> one cross-attention -> num_latents tokens
+    _target_: diff_style.models.perceiver.Perceiver
+    input_dim: ${model.net.vision_encoder.dim}
+    num_latents: 16  # tokens per image: 2 cameras x 2 frames x 16 = 64 image tokens
+    dim: ${model_dim}
+    num_heads: 6     # head_dim 64, the size the flash kernels are fastest at
+
+  obs_encoder:  # self-attention over the tokens of every camera and proprio, once per sample
+    _target_: diff_style.models.transformer.Transformer
+    dim: ${model_dim}
+    depth: 4  # the computation on the image tokens happens here, not in the Perceiver
+    num_heads: 6
+    causal: false  # true: each token sees only the tokens before it, no mask tensor needed
+    dropout: 0.1  # each branch's output, training only (DiT-Block Policy's 0.1); the attention weights: attention.dropout
+    drop_path: 0.1  # stochastic depth of the last block, linear from 0 at the first (timm's ViT); HPT's trunk: 0.1
+
+  action_decoder:  # noisy actions -> velocity, conditioned on the obs tokens and the flow time
+    _target_: diff_style.models.transformer.Transformer
+    dim: ${model_dim}
+    depth: 6
+    num_heads: 6
+    cross_attention: true   # to the obs tokens
+    cond_dim: ${model_dim}  # adaLN-Zero from the flow time embedding
+    causal: false           # true: action i attends to actions 0..i only (the obs tokens stay fully visible)
+    dropout: 0.1            # each branch's output, training only (DiT-Block Policy's 0.1); the attention weights: attention.dropout
+    drop_path: 0.1          # stochastic depth of the last block, linear from 0 at the first (timm's ViT); HPT's trunk: 0.1
+
+optimizer:  # gets the parameter groups from the policy
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.9, 0.95]  # the transformer recipes: Diffusion Policy's transformer, openpi, SmolVLA
+  weight_decay: 1.0e-3
+
+submodule_lrs:  # paths in net, each with its own lr on the same schedule; 0 = frozen (no gradients, eval mode, no EMA)
+  vision_encoder: 0.0
+
+lr_scheduler:  # gets optimizer= and total_steps= from the policy; null = constant lr
+  _target_: diff_style.utils.lr_schedulers.warmup_cosine
+  warmup_steps: 1000  # Diffusion Policy's transformer, openpi, SmolVLA

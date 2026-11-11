@@ -1,0 +1,36 @@
+[project]
+name = "diff-style"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "h5py==3.15.1",
+    "hydra-core==1.3.2",
+    "numpy==2.2.6",
+    "pytorch-lightning==2.6.1",
+    "tensorboard==2.21.0",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "transformers==5.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "marimo>=0.25.1",
+    "pytest==9.0.2",
+    "ty==0.0.100",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.29,<0.10"]
+build-backend = "uv_build"
+
+[tool.ty.environment]
+python = "./.venv"  # resolve imports from this project's environment, not the system Python
+
+[tool.marimo.runtime]
+reactive_tests = false  # marimo 0.25 crashes running test_* cells in the kernel, hanging `marimo edit`/`export`; use `uv run pytest`
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]  # test_*.py marimo notebooks: pytest collects their top-level test_* functions
+markers = ["slow: minutes long (torch.compile of the real DINOv3); skipped by default, run with -m slow"]
+addopts = "-m 'not slow'"

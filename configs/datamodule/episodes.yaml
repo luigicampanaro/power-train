@@ -1,0 +1,16 @@
+_target_: diff_style.datamodules.episode_datamodule.EpisodeDataModule
+dataset_dir: /home/eai/luigi_cloud_new/ml/act/data/tomato_picking
+stats_path: ${run_dir}/stats.pt    # copy for inspection/export; the checkpoint has its own
+# Horizons shared with the policy
+obs_horizon_1d: ${obs_horizon_1d}
+obs_horizon_2d: ${obs_horizon_2d}
+action_horizon: ${action_horizon}
+image_size: ${image_size}          # every batch is resized to this on the GPU, after the transfer
+# Fractions of whole episodes, must sum to 1. val/test get at least 1 episode if > 0;
+# train gets the rest (5 episodes -> 3/1/1). test_fraction: 0 -> no test split
+train_fraction: 0.8
+val_fraction: 0.1
+test_fraction: 0.1
+batch_size: 64
+num_workers: 8
+seed: 0                            # split only, independent of the training seed

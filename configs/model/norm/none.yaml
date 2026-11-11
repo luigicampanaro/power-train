@@ -1,0 +1,3 @@
+# No norm: the tokens as they are (torch.nn.Identity). A factory, as the norms: it ignores dim.
+_target_: torch.nn.Identity
+_partial_: true
