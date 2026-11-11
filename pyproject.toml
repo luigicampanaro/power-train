@@ -8,8 +8,8 @@ dependencies = [
     "numpy==2.2.6",
     "pytorch-lightning==2.6.1",
     "tensorboard==2.21.0",
-    "torch==2.5.1",
-    "torchvision==0.20.1",
+    "torch==2.7.1",
+    "torchvision==0.22.1",
     "transformers==5.1.0",
 ]
 
@@ -34,3 +34,15 @@ reactive_tests = false  # marimo 0.25 crashes running test_* cells in the kernel
 testpaths = ["tests"]  # test_*.py marimo notebooks: pytest collects their top-level test_* functions
 markers = ["slow: minutes long (torch.compile of the real DINOv3); skipped by default, run with -m slow"]
 addopts = "-m 'not slow'"
+
+[tool.uv]
+python-preference = "only-managed"  # uv's Python ships the headers torch.compile needs to build its kernels; the system one may not
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true  # only torch/torchvision come from here; everything else from PyPI
