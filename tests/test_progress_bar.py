@@ -53,6 +53,30 @@ def test_the_train_bar_counts_the_optimizer_steps_of_the_run_across_epochs(tmp_p
     assert set(descriptions) == {"Training".ljust(len(bar.validation_description))}
 
 
+class TrainBarSpeedSamples(pl.Callback):
+    """Rich's speed samples of the train bar (each one: the steps it counted as done at an update), after each batch."""
+
+    def __init__(self, bar: StepProgressBar) -> None:
+        self.bar = bar
+        self.samples = []
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx) -> None:
+        task = self.bar.progress.tasks[self.bar.train_progress_bar_id]
+        self.samples = [sample.completed for sample in task._progress]
+
+
+def test_the_speed_and_remaining_time_count_each_step_once(tmp_path):
+    """Rich computes it/s and the remaining time from what each update adds. The bar must only move forward, one
+    step per optimizer step: never back to the batch of the epoch (Lightning's own update) and up again, which
+    counted every jump as done steps (280,000 it/s, 0:00:01 remaining after 8 hours)."""
+    bar = StepProgressBar()
+    samples = TrainBarSpeedSamples(bar)
+    trainer = pl.Trainer(accelerator="cpu", max_steps=MAX_STEPS, max_epochs=-1, callbacks=[bar, samples], logger=False,
+                         enable_checkpointing=False, default_root_dir=tmp_path)
+    trainer.fit(TinyModel(), DataLoader(TensorDataset(torch.randn(4, 1)), batch_size=2))
+    assert samples.samples == [1] * MAX_STEPS
+
+
 def test_the_config_picks_the_step_progress_bar(tmp_path):
     cfg = small_train_config([f"output_dir={tmp_path}"])
     trainer = pl.Trainer(accelerator="cpu", callbacks=[hydra.utils.instantiate(cfg.callbacks.progress_bar)])

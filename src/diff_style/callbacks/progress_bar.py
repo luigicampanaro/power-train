@@ -20,8 +20,14 @@ class StepProgressBar(RichProgressBar):
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule, outputs: Any, batch: Any,
                            batch_idx: int) -> None:
-        super().on_train_batch_end(trainer, pl_module, outputs, batch, batch_idx)
+        # RichProgressBar.on_train_batch_end without its update to batch_idx + 1: that would set the bar back to the
+        # batch of the epoch before each update to global_step, and Rich would count each jump back up as done steps
+        # (the run of 2026-11-10 showed 280,000 it/s and 0:00:01 remaining)
+        if not self.is_disabled and self.train_progress_bar_id is None:
+            self._initialize_train_progress_bar_id()  # resumed mid-epoch, as Lightning does
         self._update(self.train_progress_bar_id, trainer.global_step)
+        self._update_metrics(trainer, pl_module)
+        self.refresh()
 
     def _get_train_description(self, current_epoch: int) -> str:
         # Padded to the validation bar's label, as Lightning does: the train row does not move when that row shows
