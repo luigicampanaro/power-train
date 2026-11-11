@@ -4,7 +4,12 @@ Each run gets its own new folder, outputs/<date>_<time> (configs/hydra), or hydr
 On several machines, start the same command on each one, with the same hydra.run.dir and trainer.num_nodes=<machines>,
 and Lightning's MASTER_ADDR (the IP of the NODE_RANK=0 machine), MASTER_PORT and NODE_RANK (0, 1, ...) set."""
 
+import os
 from pathlib import Path
+
+# Before torch allocates on the GPU. Without it, large batches fail with OOM from fragmentation: the full-resolution
+# float frames before the resize need one multi-GB block, and the free memory is split into smaller pieces
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import hydra
 import pytorch_lightning as pl
