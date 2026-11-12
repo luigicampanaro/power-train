@@ -98,6 +98,12 @@ class EpisodeDataModule(pl.LightningDataModule):
             ds,
             batch_size=self.hparams["batch_size"],
             shuffle=shuffle,
+            # Train only: every train batch has the same shape, so torch.compile does not compile a second graph for
+            # the smaller last batch (that batch is the same size every epoch, so it costs one compile, once, and its
+            # kernels stay in memory). Shuffled, so a different few samples are left out of each epoch.
+            # Val and test keep their partial batch: they are not shuffled, so it is always the same tail of the split,
+            # and their metrics must cover every sample (it also picks the best checkpoint).
+            drop_last=shuffle,
             num_workers=self.hparams["num_workers"],
             pin_memory=True,
             persistent_workers=self.hparams["num_workers"] > 0,

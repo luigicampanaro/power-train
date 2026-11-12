@@ -46,13 +46,19 @@ def test_split_by_whole_episode(tmp_path):
     assert [p.stem for p in datamodule.train_ds.paths] == ["episode_0", "episode_1", "episode_3", "episode_5", "episode_8", "episode_9"]
     assert [p.stem for p in datamodule.val_ds.paths] == ["episode_4", "episode_6"]
     assert [p.stem for p in datamodule.test_ds.paths] == ["episode_2", "episode_7"]
-    # Each loader gives every step of its own episodes once. Joint 0 of the first action = 100 * episode + 10 * t
+    # Val and test give every step of their own episodes once, in order (drop_last is off there). Joint 0 of the first
+    # action = 100 * episode + 10 * t
     first_actions = lambda loader: torch.cat([batch["actions"][:, 0, 0] for batch in loader]).int().tolist()
-    train = first_actions(datamodule.train_dataloader())
-    assert sorted(train) == [0, 10, 20, 100, 110, 120, 300, 310, 320, 500, 510, 520, 800, 810, 820, 900, 910, 920]
-    assert train != sorted(train)  # shuffled: 18 samples come out in order by chance once in 18! ≈ 6e15
     assert first_actions(datamodule.val_dataloader()) == [400, 410, 420, 600, 610, 620]
     assert first_actions(datamodule.test_dataloader()) == [200, 210, 220, 700, 710, 720]
+    # Train has drop_last (one batch shape for torch.compile): from 18 steps, 4 full batches of 4 and the partial one
+    # is dropped. Shuffled, so the 2 left out change every epoch; every batch has the same shape
+    train_batches = [batch["actions"][:, 0, 0].int().tolist() for batch in datamodule.train_dataloader()]
+    assert [len(batch) for batch in train_batches] == [4, 4, 4, 4]
+    train = [step for batch in train_batches for step in batch]
+    train_steps = {100 * episode + 10 * t for episode in [0, 1, 3, 5, 8, 9] for t in [0, 1, 2]}
+    assert len(set(train)) == 16 and set(train) < train_steps  # 2 of the 18 train steps are left out
+    assert train != sorted(train)  # shuffled: 16 samples in order by chance once in 16!
     batch = next(iter(datamodule.train_dataloader()))
     assert batch["images"].shape == (4, 1, 2, 3, 2, 4)  # (batch, obs_horizon_2d default 1, cameras, C, H, W)
     assert batch["qpos"].shape == (4, 2, 7)  # (batch, obs_horizon_1d, D)
