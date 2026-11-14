@@ -2,7 +2,7 @@
 plus the properties they promise.
 
 References, outputs and gradients: torchtitan v0.1.0 Llama 3 (RoPE, SwiGLU), Hugging Face's LlamaMLP (SwiGLU)
-and Qwen3 attention (QK-norm), timm's Mlp and SwiGLU with dropout, diffusers (timestep embedding), as seeded captures
+and Qwen3 attention (QK-norm), timm's Mlp and SwiGLU with dropout, diffusers (timestep embedding), as fixed-mask captures
 (tests/references/); torch.nn.MultiheadAttention; the attention kernels against softmax(q k^T / sqrt(d))
 v written out.
 """
@@ -23,6 +23,7 @@ from diff_style.models.transformer import TransformerBlock
 
 from references import (DROPOUT_REFERENCES, REFERENCES, assert_gradients_match, reference_gradients, renamed,
                         with_grad)
+from references.deterministic_dropout import deterministic_dropout
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 
@@ -92,12 +93,6 @@ def test_swiglu_hidden_width_matches_torchtitan_llama_feed_forward():
     assert all(mlp.w1.out_features == mlp.w3.out_features == mlp.w2.in_features for mlp in ours)
 
 
-def test_dropout_references_were_captured_with_this_torch_version():
-    assert torch.__version__.split("+")[0] == DROPOUT_REFERENCES["torch_version"], (
-        "torch draws other dropout masks in other versions: re-run tests/references/capture_dropout.py "
-        "with the project's torch")
-
-
 def test_mlp_matches_timm_mlp_with_dropout():
     """In training, with timm's dropout on the hidden activations (its drop1), and another output width (its
     out_features). The default, out_dim = dim, is DiT's and torch's MLP in tests/test_transformer.py."""
@@ -105,8 +100,8 @@ def test_mlp_matches_timm_mlp_with_dropout():
     mlp = MLP(dim=32, hidden_dim=128, dropout=ref["p"], out_dim=24)  # exact GELU, as timm's default
     mlp.load_state_dict(ref["state_dict"])  # strict: timm's names, fc1 and fc2
     x = with_grad(ref["x"])
-    torch.manual_seed(ref["seed"])
-    out = mlp(x)
+    with deterministic_dropout():
+        out = mlp(x)
     assert torch.allclose(out, ref["out"], atol=1e-6)
     assert_gradients_match(out, ref, {"x": x}, mlp)
 
@@ -119,8 +114,8 @@ def test_swiglu_mlp_matches_timm_swiglu_with_dropout():
     names = {"fc1_g": "w1", "fc1_x": "w3", "fc2": "w2"}
     mlp.load_state_dict(renamed(ref["state_dict"], names))
     x = with_grad(ref["x"])
-    torch.manual_seed(ref["seed"])
-    out = mlp(x)
+    with deterministic_dropout():
+        out = mlp(x)
     assert torch.allclose(out, ref["out"], atol=1e-6)
     assert_gradients_match(out, ref, {"x": x}, mlp, lambda grads: renamed(grads, names))
 

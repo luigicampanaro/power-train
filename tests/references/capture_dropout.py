@@ -1,24 +1,25 @@
-"""Save seeded inputs, weights and outputs of the reference dropout implementations that the policy is
+"""Save the inputs, weights and outputs of the reference dropout implementations that the policy is
 tested against (tests/test_dropout.py, test_layers.py) to dropout.pt, next to this file.
 
-Dropout is random, so these outputs are reproducible only with the same random draws: the same seed
-AND the same torch version (torch 2.8 draws other Bernoulli masks than 2.5.1). So, unlike
-capture_outputs.py, this runs with the torch version of the project, and the fixture saves it.
+Dropout is random, so every forward here runs inside deterministic_dropout (deterministic_dropout.py): its
+masks come from a fixed hash of the element index and of the draw's number, not from torch's generator, so
+these outputs are the same in every torch version and on every machine. The tests run our layers inside the
+same block, with the same draws in the same order, and thus see the same masks.
 Every reference has a permissive license: timm, Hugging Face transformers and diffusers (Apache-2.0),
 torchscale (MIT). torchscale has no release tag, and its package pins an old timm: clone its last commit outside,
-then run from the diff_style folder:
+then run from the repository root:
 
     git clone https://github.com/microsoft/torchscale /tmp/references/torchscale_4d1e0e8
     git -C /tmp/references/torchscale_4d1e0e8 checkout 4d1e0e82e5adf86dd424f1463192635b73fc8efc
-    PYTHONPATH=/tmp/references/torchscale_4d1e0e8 uv run --no-project --python 3.12 \
+    PYTHONPATH=/tmp/references/torchscale_4d1e0e8:src uv run --no-project --python 3.12 \
         --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match \
-        --with torch==2.5.1 --with timm==1.0.30 --with transformers==4.57.1 --with diffusers==0.35.2 \
+        --with torch==2.7.1 --with timm==1.0.30 --with transformers==4.57.1 --with diffusers==0.35.2 \
         --with fairscale==0.4.13 --with einops \
         python tests/references/capture_dropout.py
 
 For every reference, also the gradients of its inputs and parameters for a fixed upstream gradient
 (capture_gradients.py), back through the same dropout masks.
-Every reference runs in training mode on CPU, with the saved `seed` set right before its forward pass.
+Every reference runs in training mode on CPU.
 """
 
 from pathlib import Path
@@ -32,6 +33,7 @@ from torchscale.architecture.decoder import DecoderLayer
 from transformers import GPT2Config, GPT2Model
 
 from capture_gradients import gradients
+from deterministic_dropout import deterministic_dropout
 
 OUTPUT = Path(__file__).resolve().parent / "dropout.pt"
 
@@ -42,9 +44,9 @@ def timm_mlp() -> dict:
     torch.manual_seed(0)
     mlp = Mlp(in_features=32, hidden_features=128, out_features=24, drop=(0.3, 0.0)).train()
     x = torch.randn(4, 5, 32).requires_grad_()
-    torch.manual_seed(100)
-    out = mlp(x)
-    return {"seed": 100, "state_dict": mlp.state_dict(), "x": x.detach(), "p": 0.3, "out": out.detach(),
+    with deterministic_dropout():
+        out = mlp(x)
+    return {"state_dict": mlp.state_dict(), "x": x.detach(), "p": 0.3, "out": out.detach(),
             **gradients(out, {"x": x}, mlp)}
 
 
@@ -54,18 +56,18 @@ def timm_swiglu() -> dict:
     torch.manual_seed(1)
     swiglu = SwiGLU(in_features=32, hidden_features=85, out_features=24, bias=False, drop=(0.3, 0.0)).train()
     x = torch.randn(4, 5, 32).requires_grad_()
-    torch.manual_seed(101)
-    out = swiglu(x)
-    return {"seed": 101, "state_dict": swiglu.state_dict(), "x": x.detach(), "p": 0.3, "out": out.detach(),
+    with deterministic_dropout():
+        out = swiglu(x)
+    return {"state_dict": swiglu.state_dict(), "x": x.detach(), "p": 0.3, "out": out.detach(),
             **gradients(out, {"x": x}, swiglu)}
 
 
 def timm_drop_path() -> dict:
     torch.manual_seed(2)
     x = torch.randn(16, 3, 4).requires_grad_()
-    torch.manual_seed(102)
-    out = drop_path(x, 0.4, training=True)
-    return {"seed": 102, "x": x.detach(), "p": 0.4, "out": out.detach(), **gradients(out, {"x": x})}
+    with deterministic_dropout():
+        out = drop_path(x, 0.4, training=True)
+    return {"x": x.detach(), "p": 0.4, "out": out.detach(), **gradients(out, {"x": x})}
 
 
 def timm_vit_block() -> dict:
@@ -78,9 +80,9 @@ def timm_vit_block() -> dict:
         block.norm1.weight.uniform_(0.5, 1.5)
         block.norm2.weight.uniform_(0.5, 1.5)
     x = torch.randn(8, 6, 32).requires_grad_()
-    torch.manual_seed(103)
-    out = block(x)
-    return {"seed": 103, "state_dict": block.state_dict(), "x": x.detach(), "attn_drop": 0.1, "proj_drop": 0.2,
+    with deterministic_dropout():
+        out = block(x)
+    return {"state_dict": block.state_dict(), "x": x.detach(), "attn_drop": 0.1, "proj_drop": 0.2,
             "drop_path": 0.3, "out": out.detach(), **gradients(out, {"x": x}, block)}
 
 
@@ -101,13 +103,13 @@ def torchscale_decoder_layer() -> dict:
     layer.drop_path.register_forward_hook(lambda module, args, out: kept.append(out.flatten(1).any(1)))
     x = torch.randn(8, 5, 32).requires_grad_()
     context = torch.randn(8, 7, 32).requires_grad_()
-    torch.manual_seed(107)
-    out = layer(x, encoder_out=context)[0]
+    with deterministic_dropout():
+        out = layer(x, encoder_out=context)[0]
     assert 0 < kept[1].sum() < 8, "some samples must skip the cross-attention, and the others keep it"
     reference = gradients(out, {"x": x, "context": context}, layer)
     with torch.no_grad():
         eval_out = layer.eval()(x, encoder_out=context)[0]
-    return {"seed": 107, "state_dict": layer.state_dict(), "x": x.detach(), "context": context.detach(),
+    return {"state_dict": layer.state_dict(), "x": x.detach(), "context": context.detach(),
             "dropout": 0.2, "activation_dropout": 0.3, "drop_path": 0.5, "out": out.detach(), "eval_out": eval_out,
             **reference}
 
@@ -127,9 +129,9 @@ def gpt2_embedding_dropout() -> dict:
     input_ids = torch.randint(0, 6, (5, 4))
     captured = {}
     model.drop.register_forward_hook(lambda module, args, out: captured.update(out=out))
-    torch.manual_seed(104)
-    model(input_ids)
-    return {"seed": 104, "wte": model.wte.weight.detach(), "wpe": model.wpe.weight.detach(), "input_ids": input_ids,
+    with deterministic_dropout():
+        model(input_ids)
+    return {"wte": model.wte.weight.detach(), "wpe": model.wpe.weight.detach(), "input_ids": input_ids,
             "p": 0.3, "out": captured["out"].detach(),
             **gradients(captured["out"], {"wte": model.wte.weight, "wpe": model.wpe.weight})}
 
@@ -141,9 +143,9 @@ def diffusers_label_dropout() -> dict:
     embedder = LabelEmbedding(num_classes=5, hidden_size=8, dropout_prob=0.4)
     labels = torch.randint(0, 5, (32,))
     force_drop_ids = torch.randint(0, 2, (32,))
-    torch.manual_seed(105)
-    out = embedder.train()(labels)
-    return {"seed": 105, "embedding_table": embedder.embedding_table.weight.detach(), "labels": labels, "p": 0.4,
+    with deterministic_dropout():
+        out = embedder.train()(labels)
+    return {"embedding_table": embedder.embedding_table.weight.detach(), "labels": labels, "p": 0.4,
             "out": out.detach(), **gradients(out, {"embedding_table": embedder.embedding_table.weight}),
             "force_drop_ids": force_drop_ids,
             "forced_out": embedder.eval()(labels, force_drop_ids=force_drop_ids).detach()}
@@ -151,7 +153,6 @@ def diffusers_label_dropout() -> dict:
 
 if __name__ == "__main__":
     references = {
-        "torch_version": torch.__version__.split("+")[0],
         "timm_mlp": timm_mlp(),
         "timm_swiglu": timm_swiglu(),
         "timm_drop_path": timm_drop_path(),

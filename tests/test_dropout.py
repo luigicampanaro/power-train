@@ -1,12 +1,12 @@
 """Every dropout of the policy against a reference implementation, plus the properties each one promises.
 
-References, as seeded training-mode outputs and gradients (tests/references/; no reference code is imported):
+References, as fixed-mask training-mode outputs and gradients (tests/references/; no reference code is imported):
     DropPath, and a block with every dropout on       -> timm's drop_path and ViT Block
     the same, in a block with cross-attention         -> torchscale's DecoderLayer
     Transformer drop path rates                       -> timm's VisionTransformer
     embedding dropout                                 -> GPT-2's embd_pdrop
     NullTokenDropout (condition and modality dropout) -> diffusers' label dropout (LabelEmbedding)
-Dropout draws random masks: the same seed gives the same masks only with the torch version of the capture.
+Dropout draws random masks: the capture and the tests share them through deterministic_dropout.
 The MLPs' hidden dropout is tested with the MLPs, in tests/test_layers.py.
 """
 
@@ -25,7 +25,27 @@ from test_flow_matching import small_train_config, train_config_batch
 from test_flow_matching_network import DIM, C, H, K, T1, T2, ZeroPerceiver, make_batch, make_network
 from references import DROPOUT_REFERENCES as REFERENCES
 from references import assert_gradients_match, with_grad
+from references.deterministic_dropout import deterministic_dropout
 from test_transformer import vit_block_state_dict
+
+
+# The fixed masks
+
+def test_the_fixed_masks_ignore_the_generator_and_keep_their_probability():
+    """deterministic_dropout, which every reference below relies on: the masks come from the fixed hash, not
+    from torch's generator (another seed changes nothing), each draw is its own mask, and the kept share is
+    1 - p, so a wrong probability fails."""
+    x = torch.ones(64, 256)
+    torch.manual_seed(0)
+    with deterministic_dropout():
+        kept = F.dropout(x, 0.3)
+    torch.manual_seed(12345)
+    with deterministic_dropout():
+        again = F.dropout(x, 0.3)
+    assert torch.equal(kept, again)
+    assert 0.65 < (kept != 0).float().mean() < 0.75  # keeps about 0.7
+    with deterministic_dropout():
+        assert not torch.equal(F.dropout(x, 0.3), F.dropout(x, 0.3))  # another draw, another mask
 
 
 # Drop path
@@ -33,8 +53,8 @@ from test_transformer import vit_block_state_dict
 def test_drop_path_matches_timm():
     ref = REFERENCES["timm_drop_path"]
     x = with_grad(ref["x"])
-    torch.manual_seed(ref["seed"])
-    out = DropPath(ref["p"])(x)
+    with deterministic_dropout():
+        out = DropPath(ref["p"])(x)
     assert torch.allclose(out, ref["out"], atol=1e-6)
     assert_gradients_match(out, ref, {"x": x})
 
@@ -62,8 +82,8 @@ def test_block_dropouts_match_timm_vit_block():
     ref = REFERENCES["timm_vit_block"]
     block = vit_block(ref)
     x = with_grad(ref["x"])
-    torch.manual_seed(ref["seed"])
-    out = block(x)
+    with deterministic_dropout():
+        out = block(x)
     assert torch.allclose(out, ref["out"], atol=1e-5)
     assert_gradients_match(out, ref, {"x": x}, block, vit_block_state_dict)  # back through the same dropout masks
     block.eval()
@@ -106,8 +126,8 @@ def test_cross_attention_block_dropouts_match_torchscale_decoder_layer():
                              dropout=ref["dropout"], drop_path=ref["drop_path"])
     block.load_state_dict(torchscale_decoder_state_dict(ref["state_dict"]))  # strict: every parameter is mapped
     x, context = with_grad(ref["x"]), with_grad(ref["context"])
-    torch.manual_seed(ref["seed"])
-    out = block(x, context)
+    with deterministic_dropout():
+        out = block(x, context)
     assert torch.allclose(out, ref["out"], atol=1e-5)
     assert_gradients_match(out, ref, {"x": x, "context": context}, block, torchscale_decoder_state_dict)
     block.eval()
@@ -134,8 +154,8 @@ def test_embedding_dropout_matches_gpt2():
         net.time_embedding[net.max_past:net.max_past + H] = ref["wpe"]  # offsets 0 .. H-1
     decoder_input = capture_input(net.action_decoder)
     actions, tau, obs_tokens = F.one_hot(ref["input_ids"], 6).float(), torch.rand(5), torch.randn(5, 3, DIM)
-    torch.manual_seed(ref["seed"])
-    net(actions, tau, obs_tokens)
+    with deterministic_dropout():
+        net(actions, tau, obs_tokens)
     assert torch.allclose(decoder_input["x"], ref["out"], atol=1e-6)
     # Gradients of GPT-2's token table (our action_proj weight, transposed) and position table (our time rows)
     grad_proj, grad_time = torch.autograd.grad(decoder_input["x"], [net.action_proj.weight, net.time_embedding],
@@ -175,8 +195,8 @@ def test_null_token_dropout_matches_diffusers_label_dropout():
         null_token(dropout).copy_(table[5])
     table = with_grad(table)
     x = table[ref["labels"]]
-    torch.manual_seed(ref["seed"])
-    out = dropout(x)
+    with deterministic_dropout():
+        out = dropout(x)
     assert torch.equal(out, ref["out"])
     assert 0 < (out != x).any(1).sum() < len(x)  # some dropped, some kept
     # Gradients: the class rows are ours, the null-class row is our null token

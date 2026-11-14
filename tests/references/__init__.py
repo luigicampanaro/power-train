@@ -1,7 +1,7 @@
 """The reference implementations' saved outputs and gradients, and the checks against them.
 
 outputs.pt: capture_outputs.py (torchtitan, Hugging Face transformers and diffusers, torchcfm, torchdiffeq).
-dropout.pt: capture_dropout.py (timm, Hugging Face transformers and diffusers, torchscale, in training mode).
+dropout.pt: capture_dropout.py (timm, Hugging Face transformers and diffusers, torchscale, in training mode, with fixed masks).
 The capture scripts run outside the project's environment (see each one); pytest does not collect them. Each layer
 reference holds its upstream gradient `grad_out` and the gradients it gives, `input_grads` and `param_grads`.
 """
